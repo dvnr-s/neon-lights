@@ -90,12 +90,12 @@ class MusicPage(QWidget):
         self.beat.setMinimumHeight(70)
         self.beat.setMaximumHeight(110)
         ml.addWidget(self.beat)
-        ml.addStretch(1)
         self.tempo = label("Tempo: -", "muted")
         ml.addWidget(self.tempo)
         self.stats = label("Not running", "muted")
         self.stats.setWordWrap(True)
         ml.addWidget(self.stats)
+        ml.addStretch(1)
         root.addWidget(meter_card, 2)
 
         self._load_devices()

@@ -70,9 +70,10 @@ class ScreenPage(QWidget):
         self.preview.setMinimumHeight(120)
         self.preview.setMaximumHeight(170)
         pl.addWidget(self.preview)
-        pl.addStretch(1)
         self.stats = label("Not running", "muted")
+        self.stats.setWordWrap(True)
         pl.addWidget(self.stats)
+        pl.addStretch(1)
         root.addWidget(prev_card, 2)
 
         self._load_monitors()

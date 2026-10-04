@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QComboBox, QListWidget, QPushButton, QWidget
+from PySide6.QtWidgets import QComboBox, QLabel, QListWidget, QPushButton, QWidget
 
 from ...engine import LightingEngine, Mode
 from ...engine.effects import EFFECTS
-from ..widgets import ColorSwatch, HBox, LabeledSlider, VBox, card, label, rgb_of
+from ..widgets import ColorSwatch, HBox, LabeledSlider, VBox, card, label, repolish, rgb_of
 
 _EFFECT_HINTS = {
     "Static": "Solid Color 1.",
@@ -32,17 +32,18 @@ class EffectsPage(QWidget):
         root = HBox(self, spacing=14)
 
         # --- PC effects
-        pc_card, pl = card()
-        pl.addWidget(label("Effects", "section"))
+        self.pc_card, pl = card()
+        self.pc_badge = self._card_header(pl, "Effects")
         pl.addWidget(label("Rendered on this PC and streamed to the strip.", "hint"))
         body = HBox(spacing=14)
         self.list = QListWidget()
         self.list.addItems(self._names)
-        self.list.setFixedWidth(170)
+        self.list.setFixedWidth(150)
         body.addWidget(self.list)
 
         opts = VBox(spacing=12)
         self.speed = LabeledSlider("Speed", 0, 100, 50, "%")
+        self.speed.title.setMinimumWidth(0)  # leave the slider room in a narrow window
         opts.addWidget(self.speed)
         opts.addWidget(label("Palette", "section"))
         sw_row = HBox(spacing=10)
@@ -60,11 +61,11 @@ class EffectsPage(QWidget):
         opts.addStretch(1)
         body.addLayout(opts, 1)
         pl.addLayout(body, 1)
-        root.addWidget(pc_card, 3)
+        root.addWidget(self.pc_card, 3)
 
         # --- built-in device effects
-        dev_card, dl = card()
-        dl.addWidget(label("Built-in strip animations", "section"))
+        self.dev_card, dl = card()
+        self.dev_badge = self._card_header(dl, "Built-in strip animations")
         hint = label("Run on the LED controller itself - smooth and no PC load. "
                      "Brightness uses the strip's hardware dimmer here.", "hint")
         hint.setWordWrap(True)
@@ -78,11 +79,11 @@ class EffectsPage(QWidget):
         self.play_device = QPushButton("▶  Play on strip")
         self.play_device.setObjectName("primary")
         dl.addWidget(self.play_device)
-        dl.addStretch(1)
-        self.now_playing = label("", "muted")
+        self.now_playing = label("", "hint")
         self.now_playing.setWordWrap(True)
         dl.addWidget(self.now_playing)
-        root.addWidget(dev_card, 2)
+        dl.addStretch(1)
+        root.addWidget(self.dev_card, 2)
 
         self.reload_device_effects()
         self.reload()
@@ -153,6 +154,18 @@ class EffectsPage(QWidget):
         self._update_now_playing()
 
     # ---------------------------------------------------------------- internals
+    @staticmethod
+    def _card_header(lay, title: str) -> QLabel:
+        """Section title with a hidden "Playing" badge on the right; returns the badge."""
+        head = HBox()
+        head.addWidget(label(title, "section"))
+        head.addStretch(1)
+        badge = label("● Playing", "badge")
+        badge.hide()
+        head.addWidget(badge)
+        lay.addLayout(head)
+        return badge
+
     def _push_device(self) -> None:
         effects = self.engine.ble.protocol.device_effects
         name = self.device_combo.currentText()
@@ -192,9 +205,16 @@ class EffectsPage(QWidget):
         self.hint.setText(_EFFECT_HINTS.get(name, ""))
 
     def _update_now_playing(self) -> None:
-        if self.engine.mode == Mode.DEVICE_EFFECT:
-            text = f"▶ Playing on strip: {self.device_combo.currentText()}\nPick a PC effect to switch back."
+        mode = self.engine.mode
+        if mode == Mode.DEVICE_EFFECT:
+            text = f"▶ Playing on strip: {self.device_combo.currentText()}. Pick a PC effect to switch back."
         else:
-            current = self.list.currentItem().text() if self.list.currentItem() else ""
-            text = f"Playing from PC: {current}"
+            text = "Press Play to run this animation on the strip instead of the PC effect."
         self.now_playing.setText(text)
+        # Accent border + badge on whichever card is driving the strip.
+        for frame, badge, active in ((self.pc_card, self.pc_badge, mode == Mode.EFFECT),
+                                     (self.dev_card, self.dev_badge, mode == Mode.DEVICE_EFFECT)):
+            badge.setVisible(active)
+            if frame.property("active") != active:
+                frame.setProperty("active", active)
+                repolish(frame)

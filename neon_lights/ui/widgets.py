@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -45,17 +46,32 @@ def label(text: str, kind: str | None = None) -> QLabel:
     return lab
 
 
+def keyboard_focus_only(root: QWidget) -> None:
+    """Buttons under `root` take focus from Tab but not from clicks, so the focus ring shows only
+    for keyboard users instead of lingering on whatever was last clicked."""
+    for button in root.findChildren(QAbstractButton):
+        if button.focusPolicy() in (Qt.StrongFocus, Qt.ClickFocus, Qt.WheelFocus):  # NoFocus stays unfocusable
+            button.setFocusPolicy(Qt.TabFocus)
+
+
+def repolish(w: QWidget) -> None:
+    """Re-apply the stylesheet after a dynamic property used in a selector changed."""
+    w.style().unpolish(w)
+    w.style().polish(w)
+
+
 class ColorWheel(QWidget):
     """Hue around the circle, saturation along the radius (value is always full)."""
 
     colorPicked = Signal(QColor)
+    MAX_SIDE = 460
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._hue = 0.0
         self._sat = 1.0
         self.setMinimumSize(180, 180)
-        self.setMaximumSize(420, 420)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCursor(Qt.CrossCursor)
 
     def sizeHint(self) -> QSize:
@@ -69,7 +85,7 @@ class ColorWheel(QWidget):
         self.update()
 
     def _geometry(self) -> tuple[QPointF, float]:
-        side = min(self.width(), self.height())
+        side = min(self.width(), self.height(), self.MAX_SIDE)
         return QPointF(self.width() / 2, self.height() / 2), side / 2 - 13  # room for the marker ring
 
     def paintEvent(self, _event) -> None:
@@ -133,7 +149,7 @@ class ColorSwatch(QAbstractButton):
         self.setFixedSize(size, size)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(tooltip)
-        self.setFocusPolicy(Qt.NoFocus)
+        self.setFocusPolicy(Qt.TabFocus)
         if pickable:
             self.clicked.connect(self._open_dialog)
 
@@ -165,7 +181,7 @@ class ColorSwatch(QAbstractButton):
         p.setRenderHint(QPainter.Antialiasing)
         side = min(self.width(), self.height())
         outer = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
-        hover = self.underMouse() and self.isEnabled()
+        hover = (self.underMouse() or self.hasFocus()) and self.isEnabled()
         if self._selected or hover:
             ring = QColor(theme.ACCENT if self._selected else theme.TEXT)
             p.setPen(QPen(ring, 2.0))
@@ -201,7 +217,7 @@ class PowerButton(QAbstractButton):
         self.setCheckable(True)
         self.setFixedSize(size, size)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFocusPolicy(Qt.NoFocus)
+        self.setFocusPolicy(Qt.TabFocus)
 
     def sizeHint(self) -> QSize:
         return self.size()
@@ -220,13 +236,17 @@ class PowerButton(QAbstractButton):
         side = min(self.width(), self.height())
         r = QRectF((self.width() - side) / 2 + 1, (self.height() - side) / 2 + 1, side - 2, side - 2)
         on = self.isChecked()
-        hover = self.underMouse()
+        hover = self.underMouse() or self.hasFocus()
         if on:
             glow = QColor(theme.ACCENT)
             glow.setAlpha(70 if hover else 45)
             p.setPen(QPen(glow, 3))
             p.setBrush(QColor("#6ff0ff" if hover else theme.ACCENT))
             p.drawEllipse(r.adjusted(1.5, 1.5, -1.5, -1.5))
+            if self.hasFocus():  # keyboard focus ring; the lighter fill alone is too subtle
+                p.setPen(QPen(QColor(theme.TEXT), 1.5))
+                p.setBrush(Qt.NoBrush)
+                p.drawEllipse(r)
             ink = QColor("#04121a")
         else:
             p.setPen(QPen(QColor(theme.ACCENT if hover else theme.BORDER), 1.5))

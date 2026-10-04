@@ -68,6 +68,9 @@ QPushButton:disabled {{ color: {MUTED}; border-color: {PANEL_2}; }}
 QPushButton#primary {{ background: {ACCENT}; color: #04121a; border: none; font-weight: 600; }}
 QPushButton#primary:hover {{ background: #6ff0ff; }}
 QPushButton#danger {{ background: transparent; border: 1px solid {ERROR}; color: {ERROR}; }}
+/* Buttons only take focus from Tab (widgets.keyboard_focus_only), so these rings are keyboard-only. */
+QPushButton:focus {{ border-color: {ACCENT}; }}
+QPushButton#primary:focus, QPushButton#danger:focus {{ border: 2px solid {TEXT}; }}
 
 QPushButton#modeButton {{
     background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px;
@@ -78,6 +81,7 @@ QPushButton#modeButton:checked {{
     color: #04121a; border: none;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT}, stop:1 {ACCENT_2});
 }}
+QPushButton#modeButton:focus {{ border: 1px solid {TEXT}; }}
 
 QPushButton#sceneChip {{
     background: {PANEL}; border: 1px solid {BORDER}; border-radius: 13px;
@@ -85,6 +89,10 @@ QPushButton#sceneChip {{
 }}
 QPushButton#sceneChip:hover {{ border-color: {ACCENT_2}; color: {ACCENT_2}; }}
 QPushButton#sceneChip:checked {{ background: {ACCENT_2}; color: #1a0414; border-color: {ACCENT_2}; }}
+QPushButton#sceneChip:focus {{ border-color: {TEXT}; }}
+
+QFrame#card[active="true"] {{ border-color: {ACCENT}; }}
+QLabel#badge {{ color: {ACCENT}; font-size: 9pt; font-weight: 600; }}
 
 
 QLineEdit, QComboBox, QSpinBox {{
@@ -115,6 +123,7 @@ QSlider::handle:horizontal {{
 }}
 QSlider::handle:horizontal:hover {{ background: #ffffff; border-color: {ACCENT}; }}
 QSlider::handle:horizontal:pressed {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QSlider::handle:horizontal:focus {{ border-color: {ACCENT}; }}
 QSlider#red::sub-page:horizontal {{ background: #ff4d6d; }}
 QSlider#green::sub-page:horizontal {{ background: #3ddc84; }}
 QSlider#blue::sub-page:horizontal {{ background: #3d8bff; }}
@@ -122,13 +131,14 @@ QSlider#blue::sub-page:horizontal {{ background: #3d8bff; }}
 QListWidget {{
     background: {PANEL_2}; border: 1px solid {BORDER}; border-radius: 8px; padding: 4px; outline: none;
 }}
+QListWidget:focus {{ border-color: {ACCENT}; }}
 QListWidget::item {{ padding: 6px; border-radius: 6px; }}
 QListWidget::item:selected {{ background: {BORDER}; color: {TEXT}; border-left: 3px solid {ACCENT}; }}
 QListWidget::item:hover {{ background: {PANEL}; }}
 
 QCheckBox {{ spacing: 8px; outline: none; }}
 QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 5px; border: 1px solid {BORDER}; background: {PANEL_2}; }}
-QCheckBox::indicator:hover {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:hover, QCheckBox::indicator:focus {{ border-color: {ACCENT}; }}
 QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; image: url("{icons['check']}"); }}
 
 QProgressBar {{ background: {PANEL_2}; border: none; border-radius: 4px; height: 10px; text-align: center; }}
@@ -154,7 +164,9 @@ QMenu::separator {{ height: 1px; background: {BORDER}; margin: 4px 8px; }}
 QStatusBar {{ background: {PANEL}; color: {MUTED}; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; }}
 QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: 5px; min-height: 30px; }}
-QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; }}
+QScrollBar::handle:horizontal {{ background: {BORDER}; border-radius: 5px; min-width: 30px; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 """
 
 

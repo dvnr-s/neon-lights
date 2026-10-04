@@ -66,7 +66,7 @@ class SceneBar(QWidget):
             chip.setObjectName("sceneChip")
             chip.setCheckable(True)
             chip.setChecked(i == self._active)
-            chip.setFocusPolicy(Qt.NoFocus)
+            chip.setFocusPolicy(Qt.TabFocus)
             chip.setCursor(Qt.PointingHandCursor)
             tip = f"Apply '{scene['name']}'"
             if i < MAX_SHORTCUT_SCENES:
@@ -79,6 +79,7 @@ class SceneBar(QWidget):
             self._layout.addWidget(chip)
         add = QPushButton("＋ Save scene")
         add.setObjectName("sceneChip")
+        add.setFocusPolicy(Qt.TabFocus)
         add.setToolTip("Save the current setup as a scene (Ctrl+Shift+S)")
         add.clicked.connect(self.save_new)
         self._layout.addWidget(add)

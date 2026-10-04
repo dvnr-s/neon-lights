@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QWidget,
 )
@@ -33,7 +34,9 @@ from .bridge import QtLogHandler, UiBridge
 from .calibration import CalibrationDialog, calibration_from_settings
 from .scenes import MAX_SHORTCUT_SCENES, SceneBar
 from .pages import EffectsPage, ManualPage, MusicPage, ScreenPage
-from .widgets import GlowPreview, HBox, LabeledSlider, PowerButton, StatusDot, VBox, card, label, qcolor
+from .widgets import (
+    GlowPreview, HBox, LabeledSlider, PowerButton, StatusDot, VBox, card, keyboard_focus_only, label, qcolor,
+)
 
 log = logging.getLogger("neon.ui")
 
@@ -105,6 +108,8 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_shortcuts()
         self._restore_state()
+        keyboard_focus_only(self)
+        self.centralWidget().setFocus()
 
         self._ui_timer = QTimer(self, interval=40, timeout=self._refresh)
         self._ui_timer.start()
@@ -122,18 +127,31 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         root = QWidget()
         root.setObjectName("root")
+        # Start with (and click back to) no focused control, so no focus ring shows until Tab is used.
+        root.setFocusPolicy(Qt.ClickFocus)
         self.setCentralWidget(root)
         lay = VBox(root, spacing=12, margins=16)
 
-        # --- header
-        header = HBox()
-        title = label("Neon", "title")
-        accent = label("Lights", "titleAccent")
-        header.addWidget(title)
-        header.addWidget(accent)
-        header.addStretch(1)
+        # --- header: title, power + brightness, live preview
+        header = HBox(spacing=14)
+        title = HBox()
+        title.addWidget(label("Neon", "title"))
+        title.addWidget(label("Lights", "titleAccent"))
+        header.addLayout(title)
+        header.addSpacing(10)
+        self.power_btn = PowerButton(44)
+        self.power_btn.setToolTip("Power (Ctrl+P)")
+        self.power_btn.toggled.connect(self._on_power)
+        header.addWidget(self.power_btn)
+        self.brightness = LabeledSlider("Brightness", 1, 100, 100, "%")
+        self.brightness.title.setMinimumWidth(0)
+        self.brightness.setToolTip("Ctrl+Up / Ctrl+Down")
+        self.brightness.valueChanged.connect(self._on_brightness)
+        header.addWidget(self.brightness, 1)
         self.output_preview = GlowPreview(background=theme.BG)
-        self.output_preview.setFixedSize(230, 54)
+        self.output_preview.setFixedHeight(54)
+        self.output_preview.setMinimumWidth(150)
+        self.output_preview.setMaximumWidth(230)
         self.output_preview.setToolTip("What the strip is showing right now")
         header.addWidget(self.output_preview)
         lay.addLayout(header)
@@ -144,9 +162,10 @@ class MainWindow(QMainWindow):
         row.addWidget(label("Device", "muted"))
         self.address = QComboBox()
         self.address.setEditable(True)
-        self.address.setMinimumWidth(270)
+        self.address.setMinimumWidth(190)
+        self.address.setMaximumWidth(460)
         self.address.lineEdit().setPlaceholderText("AA:BB:CC:DD:EE:FF")
-        row.addWidget(self.address)
+        row.addWidget(self.address, 2)
         self.scan_btn = QPushButton("Scan")
         self.scan_btn.setToolTip("Search for nearby Bluetooth LED strips")
         self.scan_btn.clicked.connect(self.scan_devices)
@@ -161,25 +180,25 @@ class MainWindow(QMainWindow):
         self.status_dot = StatusDot()
         row.addWidget(self.status_dot)
         self.status_label = QLabel("Disconnected")
-        self.status_label.setMinimumWidth(120)
+        # May be clipped in a narrow window rather than pushing the buttons over each other.
+        self.status_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.status_label.setMinimumWidth(80)
         row.addWidget(self.status_label, 1)
-        self.auto_reconnect = QCheckBox("Auto-reconnect")
-        self.auto_reconnect.toggled.connect(self._on_auto_reconnect)
-        row.addWidget(self.auto_reconnect)
         cl.addLayout(row)
+        # Shown while the strip isn't connected, so edits don't silently go nowhere.
+        self.conn_hint = label("", "hint")
+        self.conn_hint.setWordWrap(True)
+        cl.addWidget(self.conn_hint)
         lay.addWidget(conn_card)
 
-        # --- power + brightness + modes
-        ctl = HBox(spacing=14)
-        self.power_btn = PowerButton(44)
-        self.power_btn.setToolTip("Power (Ctrl+P)")
-        self.power_btn.toggled.connect(self._on_power)
-        ctl.addWidget(self.power_btn)
-        self.brightness = LabeledSlider("Brightness", 1, 100, 100, "%")
-        self.brightness.setToolTip("Ctrl+Up / Ctrl+Down")
-        self.brightness.valueChanged.connect(self._on_brightness)
-        ctl.addWidget(self.brightness, 1)
-        ctl.addSpacing(10)
+        # --- scenes
+        self.scene_bar = SceneBar(self.settings, self.snapshot_scene, self.apply_scene)
+        self.scene_bar.changed.connect(self._schedule_save)
+        self.scene_bar.applied.connect(lambda name: self.statusBar().showMessage(f"Scene '{name}' applied", 4000))
+        lay.addWidget(self.scene_bar)
+
+        # --- mode tabs, directly above the page they switch
+        tabs = HBox(spacing=8)
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         for i, (_key, text) in enumerate(MODES):
@@ -188,16 +207,11 @@ class MainWindow(QMainWindow):
             b.setCheckable(True)
             b.setToolTip(f"{text} mode (Ctrl+{i + 1})")
             self.mode_group.addButton(b, i)
-            ctl.addWidget(b)
+            tabs.addWidget(b)
+        tabs.addStretch(1)
         self.mode_group.idClicked.connect(self.switch_mode)
         self.mode_group.idClicked.connect(lambda _i: self.scene_bar.set_active(None))
-        lay.addLayout(ctl)
-
-        # --- scenes
-        self.scene_bar = SceneBar(self.settings, self.snapshot_scene, self.apply_scene)
-        self.scene_bar.changed.connect(self._schedule_save)
-        self.scene_bar.applied.connect(lambda name: self.statusBar().showMessage(f"Scene '{name}' applied", 4000))
-        lay.addWidget(self.scene_bar)
+        lay.addLayout(tabs)
 
         # --- pages
         self.manual_page = ManualPage(self.engine, self.settings)
@@ -255,6 +269,10 @@ class MainWindow(QMainWindow):
         self.connect_on_start_action = QAction("Connect on startup", self, checkable=True)
         self.connect_on_start_action.toggled.connect(lambda on: self._set_setting("connect_on_start", on))
         file_menu.addAction(self.connect_on_start_action)
+        self.auto_reconnect = QAction("Auto-reconnect", self, checkable=True)
+        self.auto_reconnect.setToolTip("Reconnect automatically when the strip drops out")
+        self.auto_reconnect.toggled.connect(self._on_auto_reconnect)
+        file_menu.addAction(self.auto_reconnect)
         file_menu.addSeparator()
         file_menu.addAction(QAction("Quit", self, shortcut=QKeySequence("Ctrl+Q"), triggered=self.close))
 
@@ -426,7 +444,7 @@ class MainWindow(QMainWindow):
         self.status_dot.setColor(STATE_COLORS.get(status.state, theme.MUTED))
         connected_to = f" · {status.device_name}" if status.state == ConnectionState.CONNECTED else ""
         self.status_label.setText(status.state.value + connected_to)
-        self.status_label.setToolTip(status.message)
+        self.status_label.setToolTip(status.message or self.status_label.text())
         active = self.ble.wants_connection or status.state in (
             ConnectionState.SCANNING, ConnectionState.CONNECTING,
             ConnectionState.CONNECTED, ConnectionState.RECONNECTING,
@@ -435,8 +453,20 @@ class MainWindow(QMainWindow):
         self.connect_btn.setObjectName("danger" if active else "primary")
         self.connect_btn.style().unpolish(self.connect_btn)
         self.connect_btn.style().polish(self.connect_btn)
+        self._update_conn_hint(status, active)
         if status.message:
             self.statusBar().showMessage(status.message, 0 if status.state != ConnectionState.CONNECTED else 5000)
+
+    def _update_conn_hint(self, status: ConnectionStatus, active: bool) -> None:
+        if status.state == ConnectionState.ERROR and not active:
+            text = ("Couldn't connect. Check the strip has power and the phone app is closed "
+                    "(the strip accepts only one connection at a time).")
+        elif not active:
+            text = "Not connected: changes won't reach the strip until you connect."
+        else:
+            text = ""  # connecting or connected: the status dot says enough
+        self.conn_hint.setText(text)
+        self.conn_hint.setVisible(bool(text))
 
     def _on_scan_finished(self, result) -> None:
         self.scan_btn.setEnabled(True)
@@ -530,7 +560,8 @@ class MainWindow(QMainWindow):
         elif mode == Mode.DEVICE_EFFECT:
             self.output_preview.setColor(qcolor((40, 44, 70)), "On-strip animation")
         else:
-            self.output_preview.setColor(qcolor(self.engine.output_color))
+            caption = "" if self.ble.is_connected else "Not connected"
+            self.output_preview.setColor(qcolor(self.engine.output_color), caption)
         page = self.pages[self.stack.currentIndex()]
         if hasattr(page, "refresh"):
             page.refresh()

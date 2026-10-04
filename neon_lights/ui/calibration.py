@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QButtonGroup, QDialog, QPushButton, QWidget
 
 from ..engine import Calibration, LightingEngine
-from .widgets import HBox, LabeledSlider, VBox, card, label
+from .widgets import HBox, LabeledSlider, VBox, card, keyboard_focus_only, label
 
 TEST_PATTERNS = [
     ("Off", None),
@@ -94,6 +94,7 @@ class CalibrationDialog(QDialog):
         for s in (self.red, self.green, self.blue, self.gamma):
             s.valueChanged.connect(self._apply)
         self.patterns.idClicked.connect(self._show_pattern)
+        keyboard_focus_only(self)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

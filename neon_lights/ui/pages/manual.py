@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -64,7 +64,7 @@ class ManualPage(QWidget):
         wheel_card, wl = card()
         wl.addWidget(label("Color", "section"))
         self.wheel = ColorWheel()
-        wl.addWidget(self.wheel, 1, Qt.AlignHCenter)
+        wl.addWidget(self.wheel, 1)  # fills the card; the wheel paints itself centred
         hex_row = HBox()
         self.swatch = ColorSwatch(self._rgb, size=34)
         self.swatch.setEnabled(False)
@@ -127,6 +127,7 @@ class ManualPage(QWidget):
         self.fav_list.itemClicked.connect(self._fav_clicked)
         QShortcut(QKeySequence.Delete, self.fav_list, activated=self._delete_selected_favorite,
                   context=Qt.WidgetShortcut)
+        self._deleted: tuple[int, dict] | None = None  # last deleted favorite, for Undo
         fl.addWidget(self.fav_list, 1)
         self.fav_empty = label("No favorites yet. Pick a color and press  ＋ Save current  (Ctrl+S).", "muted")
         self.fav_empty.setAlignment(Qt.AlignCenter)
@@ -135,6 +136,18 @@ class ManualPage(QWidget):
         fl.addWidget(self.fav_empty, 1)
         self.fav_hint = label("Click to apply · right-click to rename or delete", "hint")
         fl.addWidget(self.fav_hint)
+        self.undo_bar = QWidget()
+        ul = HBox(self.undo_bar, spacing=8)
+        self.undo_label = label("", "hint")
+        ul.addWidget(self.undo_label)
+        undo = QPushButton("Undo")
+        undo.setObjectName("sceneChip")
+        undo.clicked.connect(self._undo_delete)
+        ul.addWidget(undo)
+        ul.addStretch(1)
+        self.undo_bar.hide()
+        fl.addWidget(self.undo_bar)
+        self._undo_timer = QTimer(self, singleShot=True, interval=8000, timeout=self.undo_bar.hide)
         right.addWidget(fav_card, 1)
 
         self.wheel.colorPicked.connect(lambda c: self.set_color(rgb_of(c), source="wheel"))
@@ -222,9 +235,28 @@ class ManualPage(QWidget):
     def _delete_selected_favorite(self) -> None:
         row = self.fav_list.currentRow()
         if row >= 0:
-            del self.settings["favorites"][row]
-            self._reload_favorites()
-            self.changed.emit()
+            self._delete_favorite(row)
+
+    def _delete_favorite(self, row: int) -> None:
+        fav = self.settings["favorites"].pop(row)
+        self._deleted = (row, fav)
+        self._reload_favorites()
+        self.undo_label.setText(f"Deleted '{fav['name']}'")
+        self.undo_bar.show()
+        self._undo_timer.start()
+        self.changed.emit()
+
+    def _undo_delete(self) -> None:
+        self._undo_timer.stop()
+        self.undo_bar.hide()
+        if self._deleted is None:
+            return
+        row, fav = self._deleted
+        self._deleted = None
+        favorites = self.settings["favorites"]
+        favorites.insert(min(row, len(favorites)), fav)
+        self._reload_favorites()
+        self.changed.emit()
 
     def _fav_menu(self, pos) -> None:
         item = self.fav_list.itemAt(pos)
@@ -245,7 +277,8 @@ class ManualPage(QWidget):
         elif chosen == overwrite:
             fav["color"] = [int(v) for v in self._rgb]
         elif chosen == delete:
-            del self.settings["favorites"][row]
+            self._delete_favorite(row)
+            return
         else:
             return
         self._reload_favorites()
