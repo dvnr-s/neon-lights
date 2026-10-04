@@ -6,3 +6,4 @@ dist/
 *.spec
 assets/icon.ico
 *_results.txt
+screenshots/
